@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CustomLang Web Builder IDE</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex;
+      height: 100vh;
+    }
+    #editor {
+      width: 40%;
+      background: #1e1e1e;
+      color: #f8f8f2;
+      padding: 1rem;
+      font-family: monospace;
+      border-right: 2px solid #ccc;
+      resize: horizontal;
+      overflow: auto;
+    }
+    #preview {
+      flex: 1;
+      background: #fff;
+      border: none;
+    }
+    button {
+      background-color: #4caf50;
+      color: white;
+      border: none;
+      padding: 0.5rem 1rem;
+      margin-top: 1rem;
+      margin-right: 0.5rem;
+      cursor: pointer;
+      border-radius: 5px;
+    }
+    textarea {
+      width: 100%;
+      height: 75%;
+      background: #1e1e1e;
+      color: #f8f8f2;
+      border: none;
+      padding: 10px;
+      font-size: 14px;
+      resize: vertical;
+    }
+    h2 { color: #fff; }
+  </style>
+</head>
+<body>
+  <div id="editor">
+    <h2>CustomLang Editor</h2>
+    <textarea id="code"></textarea>
+    <br>
+    <button onclick="runCode()">▶ Run</button>
+    <button onclick="saveCode()">💾 Save</button>
+    <button onclick="loadCode()">📂 Load</button>
+    <button onclick="exportHTML()">⬇ Export HTML</button>
+  </div>
+  <iframe id="preview"></iframe>
+
+  <script>
+    const defaultCode = `page(title: "My Portfolio", color: "#f5f5f5", font: "Segoe UI") {
+  header(text: "Hi, I'm Talha")
+
+  section(title: "About Me") {
+    paragraph("An aspiring developer who builds from imagination.")
+    image(src: "https://via.placeholder.com/300x150")
+  }
+
+  section(title: "Skills") {
+    list("HTML", "CSS", "JavaScript", "Custom Languages")
+  }
+
+  section(title: "Projects") {
+    card(title: "2D Game Engine", content: "Built a full 2D engine with scripting")
+    card(title: "GhostWriter", content: "A Firebase-based writing tool")
+  }
+
+  form(action: "https://example.com/submit") {
+    input(type: "text", placeholder: "Your Name")
+    input(type: "email", placeholder: "Your Email")
+    button(text: "Contact Me")
+  }
+
+  footer("Built with 💻 by Talha")
+}`;
+
+    document.getElementById('code').value = localStorage.getItem('customlang-code') || defaultCode;
+
+    function parseCustomLang(code) {
+      const lines = code.split('\n').map(l => l.trim());
+      let html = '';
+      const stack = [];
+
+      for (let line of lines) {
+        if (line.startsWith('page(')) {
+          const title = match(line, /title:\s*\"(.*?)\"/);
+          const color = match(line, /color:\s*\"(.*?)\"/) || '#ffffff';
+          const font = match(line, /font:\s*\"(.*?)\"/) || 'sans-serif';
+          html += `<!DOCTYPE html><html><head><title>${title}</title><style>
+            body{background:${color};font-family:${font};padding:2rem;}
+            h1,h2{color:#333;}
+            section{margin-bottom:2rem;}
+            input,button{padding:10px;margin:5px 0;width:100%;max-width:400px;}
+            img{max-width:100%;height:auto;display:block;margin:10px 0;}
+            .card{border:1px solid #ccc;padding:15px;margin:10px 0;border-radius:5px;}
+          </style></head><body>`;
+        }
+        else if (line.startsWith('header(')) {
+          const text = match(line, /text:\s*\"(.*?)\"/);
+          html += `<h1>${text}</h1>`;
+        }
+        else if (line.startsWith('section(')) {
+          const title = match(line, /title:\s*\"(.*?)\"/);
+          html += `<section><h2>${title}</h2>`;
+          stack.push('section');
+        }
+        else if (line.startsWith('paragraph(')) {
+          const text = match(line, /\"(.*?)\"/);
+          html += `<p>${text}</p>`;
+        }
+        else if (line.startsWith('image(')) {
+          const src = match(line, /src:\s*\"(.*?)\"/);
+          html += `<img src="${src}" alt="" />`;
+        }
+        else if (line.startsWith('list(')) {
+          const items = Array.from(line.matchAll(/\"(.*?)\"/g)).map(m => m[1]);
+          html += `<ul>` + items.map(i => `<li>${i}</li>`).join('') + `</ul>`;
+        }
+        else if (line.startsWith('card(')) {
+          const title = match(line, /title:\s*\"(.*?)\"/);
+          const content = match(line, /content:\s*\"(.*?)\"/);
+          html += `<div class="card"><strong>${title}</strong><p>${content}</p></div>`;
+        }
+        else if (line.startsWith('button(')) {
+          const text = match(line, /text:\s*\"(.*?)\"/);
+          const link = match(line, /link:\s*\"(.*?)\"/) || '';
+          html += link ? `<a href="${link}"><button>${text}</button></a>` : `<button>${text}</button>`;
+        }
+        else if (line.startsWith('form(')) {
+          const action = match(line, /action:\s*\"(.*?)\"/);
+          html += `<form action="${action}">`;
+          stack.push('form');
+        }
+        else if (line.startsWith('input(')) {
+          const type = match(line, /type:\s*\"(.*?)\"/);
+          const placeholder = match(line, /placeholder:\s*\"(.*?)\"/);
+          html += `<input type="${type}" placeholder="${placeholder}" />`;
+        }
+        else if (line.startsWith('footer(')) {
+          const text = match(line, /\"(.*?)\"/);
+          html += `<footer><hr><p>${text}</p></footer>`;
+        }
+        else if (line === '}') {
+          const tag = stack.pop();
+          if (tag === 'form') html += `</form>`;
+          else if (tag === 'section') html += `</section>`;
+        }
+      }
+      html += '</body></html>';
+      return html;
+    }
+
+    function match(str, regex) {
+      const m = str.match(regex);
+      return m ? m[1] : null;
+    }
+
+    function runCode() {
+      const code = document.getElementById('code').value;
+      const output = parseCustomLang(code);
+      document.getElementById('preview').srcdoc = output;
+    }
+
+    function saveCode() {
+      const code = document.getElementById('code').value;
+      localStorage.setItem('customlang-code', code);
+      alert('Saved!');
+    }
+
+    function loadCode() {
+      const code = localStorage.getItem('customlang-code');
+      if (code) document.getElementById('code').value = code;
+      runCode();
+    }
+
+    function exportHTML() {
+      const html = parseCustomLang(document.getElementById('code').value);
+      const blob = new Blob([html], { type: 'text/html' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'customlang_output.html';
+      link.click();
+    }
+
+    runCode();
+  </script>
+</body>
+</html>
